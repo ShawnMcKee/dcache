@@ -103,6 +103,8 @@ public class CopyFilter implements Filter {
 
     private static final String QUERY_KEY_ASKED_TO_DELEGATE = "asked-to-delegate";
     private static final String REQUEST_HEADER_CREDENTIAL = "Credential";
+    private static final String REQUEST_HEADER_SCITAG = "SciTag";
+    private static final String REQUEST_HEADER_TRANSFER_HEADER_SCITAG = "TransferHeaderSciTag";
     private static final String REQUEST_HEADER_TRANSFER_HEADER_PREFIX = "transferheader";
     private static final String REQUEST_HEADER_VERIFICATION = "RequireChecksumVerification";
     private static final String TPC_ERROR_ATTRIBUTE = "org.dcache.tpc-error";
@@ -110,6 +112,9 @@ public class CopyFilter implements Filter {
     private static final String TPC_REQUIRE_CHECKSUM_VERIFICATION_ATTRIBUTE = "org.dcache.tpc-require-checksum-verify";
     private static final String TPC_SOURCE_ATTRIBUTE = "org.dcache.tpc-source";
     private static final String TPC_DESTINATION_ATTRIBUTE = "org.dcache.tpc-destination";
+    private static final String TPC_SCITAG_ATTRIBUTE = "org.dcache.tpc-scitag";
+    private static final String TPC_TRANSFER_HEADER_SCITAG_ATTRIBUTE =
+          "org.dcache.tpc-transferheaderscitag";
 
 
     private ImmutableMap<String, String> _clientIds;
@@ -190,6 +195,14 @@ public class CopyFilter implements Filter {
 
     public static URI getTpcDestination(HttpServletRequest request) {
         return (URI) request.getAttribute(TPC_DESTINATION_ATTRIBUTE);
+    }
+
+    public static String getTpcSciTag(HttpServletRequest request) {
+        return (String) request.getAttribute(TPC_SCITAG_ATTRIBUTE);
+    }
+
+    public static String getTpcTransferHeaderSciTag(HttpServletRequest request) {
+        return (String) request.getAttribute(TPC_TRANSFER_HEADER_SCITAG_ATTRIBUTE);
     }
 
     @Required
@@ -404,6 +417,9 @@ public class CopyFilter implements Filter {
           throws BadRequestException, InterruptedException, ErrorResponseException {
         Direction direction = getDirection();
         URI remote = getRemoteLocation();
+        HttpServletRequest servletRequest = ServletRequest.getRequest();
+
+        captureSciTagHeaders(servletRequest);
 
         setRemoteUrlAttribute(direction, remote);
 
@@ -434,12 +450,12 @@ public class CopyFilter implements Filter {
 
         var transferHeaders = buildTransferHeaders(request);
         var transferFlags = buildTransferFlags();
+          String transferTag = transferTagForPool(servletRequest);
 
         var transferResult = _remoteTransfers.acceptRequest(transferHeaders,
               getSubject(), getRestriction(), path, remote, credential,
-              direction, transferFlags, overwriteAllowed, wantDigest);
+              transferTag, direction, transferFlags, overwriteAllowed, wantDigest);
 
-        HttpServletRequest servletRequest = ServletRequest.getRequest();
         transferResult.addListener(() -> {
             try {
                 var error = transferResult.get();
@@ -449,6 +465,36 @@ public class CopyFilter implements Filter {
                       "problem getting result: " + e);
             }
         }, MoreExecutors.directExecutor());
+    }
+
+    private void captureSciTagHeaders(HttpServletRequest request) {
+        request.setAttribute(TPC_SCITAG_ATTRIBUTE,
+              sanitiseHeaderValue(request.getHeader(REQUEST_HEADER_SCITAG)));
+        request.setAttribute(TPC_TRANSFER_HEADER_SCITAG_ATTRIBUTE,
+              sanitiseHeaderValue(request.getHeader(REQUEST_HEADER_TRANSFER_HEADER_SCITAG)));
+    }
+
+    private String sanitiseHeaderValue(String value) {
+        if (value == null) {
+            return "-";
+        }
+
+        String trimmedValue = value.trim();
+        return trimmedValue.isEmpty() ? "-" : trimmedValue;
+    }
+
+    private String transferTagForPool(HttpServletRequest request) {
+        String sciTag = getTpcSciTag(request);
+        if (sciTag != null && !"-".equals(sciTag)) {
+            return sciTag;
+        }
+
+        String transferHeaderSciTag = getTpcTransferHeaderSciTag(request);
+        if (transferHeaderSciTag != null && !"-".equals(transferHeaderSciTag)) {
+            return transferHeaderSciTag;
+        }
+
+        return "";
     }
 
     private void setRemoteUrlAttribute(Direction direction, URI remote) {
