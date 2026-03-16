@@ -20,11 +20,7 @@ package org.dcache.pool.movers;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.net.InetAddresses.forString;
 
-<<<<<<< HEAD
-=======
 import com.google.common.base.Splitter;
-import com.google.common.base.Strings;
->>>>>>> 1a16d61c36 (Address PR review feedback for SciTag parsing and VO mapping)
 import com.google.common.net.HostAndPort;
 
 import diskCacheV111.vehicles.MoverInfoMessage;
@@ -275,8 +271,6 @@ public class TransferLifeCycle {
             case "xrootd":
             case "http":
             case "https":
-            case "remotehttpdatatransfer":
-            case "remotehttpsdatatransfer":
                 return true;
             default:
                 return false;
