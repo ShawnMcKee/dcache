@@ -138,7 +138,7 @@ public class TransferLifeCycleTest {
     }
 
     @Test
-    public void shouldSetEndMarkerStartTimeFromTransferDuration() throws Exception {
+    public void shouldDeriveEndMarkerTimesFromTransferEnd() throws Exception {
         try (DatagramSocket socket = new DatagramSocket(0, InetAddress.getByName("127.0.0.1"))) {
             socket.setSoTimeout(700);
 
@@ -156,8 +156,9 @@ public class TransferLifeCycleTest {
             mover.setBytesRead(1024);
             mover.setBytesWritten(0);
 
-            Instant expectedStart = Instant.ofEpochMilli(mover.getTimestamp());
-            Instant expectedEnd = expectedStart.plusMillis(transferDuration);
+            // the mover info message is created when the transfer has finished
+            Instant expectedEnd = Instant.ofEpochMilli(mover.getTimestamp());
+            Instant expectedStart = expectedEnd.minusMillis(transferDuration);
 
             lifecycle.onEnd(
                   new InetSocketAddress("203.0.113.20", 42000),
